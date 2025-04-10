@@ -4,7 +4,7 @@ using Monopoly_V4.Spaces.PropertySpaces;
 
 namespace Monopoly_V4
 {
-    public class Bank
+    public class Bank : IBank
     {
         public IReadOnlyDictionary<PlayerToken, int> MoneyByPlayersPlaying { get => playerMoney; }
         public IReadOnlyList<TransactionInfo> Transactions { get => closedTransactions.Select(x => x.Info).ToList().Concat(openTransactions.Keys.Select(x => x.Info)).ToList(); }
@@ -31,7 +31,7 @@ namespace Monopoly_V4
                 playerMoney.Add(token, 1500);
         }
 
-        private TransactionInfo StartTransaction(PlayerToken? payee, PlayerToken? payer, int amount, bool required, IValuable? valuableInvolved = null, Action? onComplete = null, Action? onCancel = null)
+        TransactionInfo IBank.StartTransaction(PlayerToken? payee, PlayerToken? payer, int amount, bool required, IValuable? valuableInvolved = null, Action? onComplete = null, Action? onCancel = null)
         {
             if (payee == null && payer == null) throw new ArgumentException("Both payee and payer can not be null.");
             if (payee is PlayerToken p && !playerMoney.ContainsKey(p)) throw new ArgumentException($"{nameof(payee)}, player token not found.");
@@ -42,7 +42,10 @@ namespace Monopoly_V4
             openTransactions.Add(transaction, valuableInvolved);
             return transaction.Info;
         }
-
+        private TransactionInfo StartTransaction(PlayerToken? payee, PlayerToken? payer, int amount, bool required, IValuable? valuableInvolved = null, Action? onComplete = null, Action? onCancel = null)
+        {
+            return (this as IBank).StartTransaction(payee, payer, amount, required, valuableInvolved, onComplete, onCancel);
+        }
         public TransactionInfo StartTransaction(PlayerToken? payee, PlayerToken? payer, int amount, bool required) // For any transaction that does not require valuable to be locked (fee, salary etc)
         {
             if (payee == null && payer == null) throw new ArgumentException("Both payee and payer can not be null.");
@@ -77,7 +80,14 @@ namespace Monopoly_V4
             ArgumentNullException.ThrowIfNull(street, nameof(street));
             if (street.Owner == null) throw new ArgumentException("Street does not have an owner.");
             if (openTransactions.ContainsValue(street)) throw new ArgumentException("Street is already involved in a transaction.");
-            throw new NotImplementedException();
+
+            var nextDowngrade = street.GetNextDowngradeBuildingType() ?? throw new ArgumentException("Street is not eligible for downgrade.");
+            if (street.BuildingType == BuildingType.Hotel && houses < street.HouseRents.Length) throw new InvalidOperationException("Bank does not have enough houses.");
+
+            if (street.BuildingType == BuildingType.Hotel)
+                return StartTransaction(street.Owner.PlayerToken, null, street.BuildingCost / 2, true, street, () => { street.DowngradeBuilding(); houses -= 4; hotels++; });
+            else
+                return StartTransaction(street.Owner.PlayerToken, null, street.BuildingCost / 2, true, street, () => { street.DowngradeBuilding(); houses++; });            
         }
         private void ConfirmPendingBuilding(BuildingType buildingType)
         {
@@ -86,7 +96,7 @@ namespace Monopoly_V4
             else
             {
                 pendingHotels--;
-                houses++;
+                houses += 4;
             }                
         }
         private void RemoveBuilding(BuildingType buildingType)

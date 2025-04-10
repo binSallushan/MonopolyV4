@@ -44,7 +44,12 @@ namespace Monopoly_V4.Spaces.PropertySpaces
             else
                 return Enums.BuildingType.Hotel;
         }
-
+        public BuildingType? GetNextDowngradeBuildingType()
+        {
+            if (BuildingType == Enums.BuildingType.House && BuildingCount <= 1)
+                return null;
+            return Enums.BuildingType.House;
+        }
         public void UpgradeBuilding()
         {
             if (BuildingType == Enums.BuildingType.Hotel)
